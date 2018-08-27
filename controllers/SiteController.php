@@ -2,41 +2,14 @@
 
 namespace app\controllers;
 
+use app\models\Tree;
 use Yii;
-use yii\filters\AccessControl;
+use yii\helpers\Url;
 use yii\web\Controller;
-use yii\web\Response;
-use yii\filters\VerbFilter;
-use app\models\LoginForm;
-use app\models\ContactForm;
+use yii\web\HttpException;
 
 class SiteController extends Controller
 {
-    /**
-     * {@inheritdoc}
-     */
-    public function behaviors()
-    {
-        return [
-            'access' => [
-                'class' => AccessControl::className(),
-                'only' => ['logout'],
-                'rules' => [
-                    [
-                        'actions' => ['logout'],
-                        'allow' => true,
-                        'roles' => ['@'],
-                    ],
-                ],
-            ],
-            'verbs' => [
-                'class' => VerbFilter::className(),
-                'actions' => [
-                    'logout' => ['post'],
-                ],
-            ],
-        ];
-    }
 
     /**
      * {@inheritdoc}
@@ -46,11 +19,7 @@ class SiteController extends Controller
         return [
             'error' => [
                 'class' => 'yii\web\ErrorAction',
-            ],
-            'captcha' => [
-                'class' => 'yii\captcha\CaptchaAction',
-                'fixedVerifyCode' => YII_ENV_TEST ? 'testme' : null,
-            ],
+            ]
         ];
     }
 
@@ -59,70 +28,72 @@ class SiteController extends Controller
      *
      * @return string
      */
-    public function actionIndex()
+    public function actionIndex($id=null)
     {
-        return $this->render('index');
-    }
-
-    /**
-     * Login action.
-     *
-     * @return Response|string
-     */
-    public function actionLogin()
-    {
-        if (!Yii::$app->user->isGuest) {
-            return $this->goHome();
-        }
-
-        $model = new LoginForm();
-        if ($model->load(Yii::$app->request->post()) && $model->login()) {
-            return $this->goBack();
-        }
-
-        $model->password = '';
-        return $this->render('login', [
-            'model' => $model,
+        return $this->render('index', [
+            'tree' => Tree::prepareTree(),
+            'model' => $this->loadModel($id)
         ]);
     }
 
     /**
-     * Logout action.
-     *
-     * @return Response
+     * @param null $id
+     * @throws HttpException
+     * @throws \Throwable
+     * @throws \yii\db\StaleObjectException
      */
-    public function actionLogout()
+    public function actionDelete($id=null)
     {
-        Yii::$app->user->logout();
+        $model = $this->loadModel($id);
 
-        return $this->goHome();
-    }
-
-    /**
-     * Displays contact page.
-     *
-     * @return Response|string
-     */
-    public function actionContact()
-    {
-        $model = new ContactForm();
-        if ($model->load(Yii::$app->request->post()) && $model->contact(Yii::$app->params['adminEmail'])) {
-            Yii::$app->session->setFlash('contactFormSubmitted');
-
-            return $this->refresh();
+        if (!$model->delete()) {
+            Yii::$app->session->setFlash('error', 'Unable to delete node');
         }
-        return $this->render('contact', [
-            'model' => $model,
-        ]);
+        Yii::$app->session->setFlash('info', 'Node deleted');
+
+        $this->redirect('/index.php');
     }
 
     /**
-     * Displays about page.
-     *
-     * @return string
+     * @param null $id
+     * @throws HttpException
+     * @throws \yii\base\InvalidConfigException
      */
-    public function actionAbout()
+    public function actionSave($id=null)
     {
-        return $this->render('about');
+        $model = $this->loadModel($id);
+
+        $model->load(Yii::$app->request->getBodyParams());
+
+        if ($model->save())
+        {
+            Yii::$app->session->setFlash('success', 'Node has been saved');
+        }
+        else {
+            Yii::$app->session->setFlash('error', 'Node could not be saved');
+        }
+
+        $this->redirect(Url::to('/index.php'));
+
     }
+
+
+
+    /**
+     * @param $id
+     * @return Tree|null
+     */
+    private function loadModel($id)
+    {
+        if ($id) {
+            $model = Tree::findOne($id);
+        } else {
+            $model  = new Tree();
+            $model->parent_id = Yii::$app->getRequest()->getQueryParam('parent_id');
+        }
+        return $model;
+    }
+
+
+
 }
